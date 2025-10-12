@@ -1,0 +1,132 @@
+# === 自定义版（只保留一个手选分组；安全/稳定优先） ===
+port: 7890
+socks-port: 7891
+allow-lan: false
+mode: Rule
+log-level: info                 
+
+# 控制端 & 连接保持
+external-controller: 127.0.0.1:9090
+keep-alive-interval: 60
+keep-alive-idle: 60
+disable-keep-alive: false
+find-process-mode: strict
+unified-delay: true
+tcp-concurrent: true
+
+# 记住选择 & fake-ip 映射
+profile:
+  store-selected: true
+  store-fake-ip: true
+
+# ===================== DNS（防泄露方案） =====================
+dns:
+  enable: true
+  ipv6: false
+  listen: '127.0.0.1:53'
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  use-hosts: true
+  use-system-hosts: true
+  respect-rules: true
+  prefer-h3: false              # 关HTTP/3，避免DoH(QUIC)被拦导致测速/解析超时
+
+  # 仅用于引导解析DoH端点（明文，影响极小）
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+
+  # 主上游（国内DoH）——直连域名更准更稳
+  nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+
+  # DIRECT 解析也走国内DoH
+  direct-nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+
+  # 解析“代理节点自身域名”优先国内DoH；也提供经代理的海外DoH作兜底
+  proxy-server-nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+    - https://1.1.1.1/dns-query#🚀 节点选择
+    - https://8.8.8.8/dns-query#🚀 节点选择
+
+  # 备用上游（全部经代理发出，既抗污染也不侧漏）
+  fallback:
+    - https://1.1.1.1/dns-query#🚀 节点选择
+    - https://1.0.0.1/dns-query#🚀 节点选择
+    - https://8.8.8.8/dns-query#🚀 节点选择
+    - https://9.9.9.9/dns-query#🚀 节点选择
+
+  # 命中海外/被墙/可疑时优先采用 fallback（且fallback走代理）
+  fallback-filter:
+    geoip: true
+    geosite:
+      - geolocation-!cn
+      - gfw
+    ipcidr:
+      - 240.0.0.0/4
+      - 0.0.0.0/32
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+      - 127.0.0.0/8
+
+  # 精细策略：CN→国内DoH；海外/被墙→海外DoH且“经代理”发出
+  nameserver-policy:
+    "geosite:cn":
+      - https://doh.pub/dns-query
+      - https://dns.alidns.com/dns-query
+    "geosite:geolocation-!cn":
+      - https://1.1.1.1/dns-query#🚀 节点选择
+      - https://1.0.0.1/dns-query#🚀 节点选择
+      - https://8.8.8.8/dns-query#🚀 节点选择
+    "geosite:gfw":
+      - https://1.1.1.1/dns-query#🚀 节点选择
+      - https://8.8.8.8/dns-query#🚀 节点选择
+
+  # 不使用 fake-ip 的域名（避免 WebRTC/NTP/局域网等异常）
+  fake-ip-filter:
+    - "*.lan"
+    - "*.local"
+    - "stun.*.*"
+    - "stun.*"
+    - "time.*.*"
+    - "ntp.*.*"
+    - "router.*"
+    - "wlan.*"
+    - "localhost"
+    - "+.srv.nintendo.net"
+    - "+.stun.playstation.net"
+    - "+.msftconnecttest.com"
+    - "+.msftncsi.com"
+    - "+.xboxlive.com"
+    - "xbox.*.microsoft.com"
+    - "*.battlenet.com.cn"
+    - "*.battlenet.com"
+    - "*.blzstatic.cn"
+    - "*.battle.net"
+
+# ===================== 嗅探 =====================
+sniffer:
+  enable: true
+  force-dns-route: true
+  sniff:
+    TLS:
+      ports: [443, 8443]
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+
+# ===================== Geo 数据 =====================
+geodata-mode: true
+geo-auto-update: true
+geo-update-interval: 72        # 降低更新频度，减少网络/磁盘开销
+geodata-loader: standard
+geox-url:
+  geoip: https://fastgh.lainbo.com/https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip-lite.dat
+  geosite: https://fastgh.lainbo.com/https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat
+  mmdb: https://fastgh.lainbo.com/https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country-lite.mmdb
+  asn: https://fastgh.lainbo.com/https://github.com/xishang0128/geoip/releases/download/latest/GeoLite2-ASN.mmdb
